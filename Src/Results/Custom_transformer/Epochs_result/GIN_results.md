@@ -1,0 +1,54 @@
+==================================================
+GIN | patch=4 | alpha=0.5 | layers=3 | device=cuda
+==================================================
+Ep 001/50 | tr_loss=1.0684 tr_acc=63.60% | te_loss=1.0343 te_acc=65.36%
+Ep 002/50 | tr_loss=0.9709 tr_acc=66.57% | te_loss=1.0504 te_acc=64.27%
+Ep 003/50 | tr_loss=0.9299 tr_acc=68.02% | te_loss=0.9850 te_acc=66.11%
+Ep 004/50 | tr_loss=0.9058 tr_acc=68.47% | te_loss=0.9692 te_acc=66.74%
+Ep 005/50 | tr_loss=0.8848 tr_acc=69.37% | te_loss=0.9562 te_acc=67.79%
+Ep 006/50 | tr_loss=0.8765 tr_acc=69.68% | te_loss=0.9515 te_acc=67.00%
+Ep 007/50 | tr_loss=0.8641 tr_acc=69.83% | te_loss=0.9406 te_acc=67.98%
+Ep 008/50 | tr_loss=0.8507 tr_acc=70.37% | te_loss=0.9082 te_acc=68.60%
+Ep 009/50 | tr_loss=0.8444 tr_acc=70.28% | te_loss=0.9404 te_acc=68.44%
+Ep 010/50 | tr_loss=0.8321 tr_acc=70.74% | te_loss=0.9200 te_acc=68.61%
+Ep 011/50 | tr_loss=0.8257 tr_acc=70.93% | te_loss=0.9048 te_acc=68.83%
+Ep 012/50 | tr_loss=0.8161 tr_acc=71.13% | te_loss=0.9104 te_acc=68.60%
+Ep 013/50 | tr_loss=0.8137 tr_acc=71.31% | te_loss=0.8968 te_acc=68.96%
+Ep 014/50 | tr_loss=0.8003 tr_acc=71.69% | te_loss=0.8939 te_acc=69.33%
+Ep 015/50 | tr_loss=0.7943 tr_acc=71.84% | te_loss=0.9055 te_acc=69.47%
+Ep 016/50 | tr_loss=0.7900 tr_acc=72.01% | te_loss=0.8786 te_acc=69.91%
+Ep 017/50 | tr_loss=0.7786 tr_acc=72.48% | te_loss=0.8769 te_acc=69.74%
+Ep 018/50 | tr_loss=0.7758 tr_acc=72.23% | te_loss=0.8592 te_acc=70.26%
+Ep 019/50 | tr_loss=0.7646 tr_acc=73.07% | te_loss=0.8937 te_acc=69.75%
+Ep 020/50 | tr_loss=0.7628 tr_acc=72.93% | te_loss=0.8902 te_acc=69.73%
+Ep 021/50 | tr_loss=0.7508 tr_acc=73.43% | te_loss=0.8704 te_acc=70.60%
+Ep 022/50 | tr_loss=0.7422 tr_acc=73.51% | te_loss=0.8797 te_acc=69.66%
+Ep 023/50 | tr_loss=0.7415 tr_acc=73.71% | te_loss=0.8986 te_acc=70.10%
+Ep 024/50 | tr_loss=0.7296 tr_acc=74.01% | te_loss=0.8751 te_acc=70.49%
+Ep 025/50 | tr_loss=0.7257 tr_acc=74.15% | te_loss=0.8862 te_acc=70.39%
+Ep 026/50 | tr_loss=0.7246 tr_acc=74.09% | te_loss=0.8572 te_acc=70.66%
+Ep 027/50 | tr_loss=0.7170 tr_acc=74.45% | te_loss=0.8772 te_acc=70.39%
+Ep 028/50 | tr_loss=0.7074 tr_acc=74.79% | te_loss=0.8650 te_acc=70.75%
+Ep 029/50 | tr_loss=0.7022 tr_acc=75.06% | te_loss=0.8837 te_acc=70.65%
+Ep 030/50 | tr_loss=0.6904 tr_acc=75.47% | te_loss=0.8582 te_acc=70.43%
+Ep 031/50 | tr_loss=0.6839 tr_acc=75.66% | te_loss=0.8568 te_acc=70.79%
+Ep 032/50 | tr_loss=0.6843 tr_acc=75.36% | te_loss=0.8701 te_acc=70.63%
+Ep 033/50 | tr_loss=0.6728 tr_acc=75.78% | te_loss=0.8767 te_acc=70.73%
+Ep 034/50 | tr_loss=0.6579 tr_acc=76.49% | te_loss=0.8546 te_acc=71.03%
+Ep 035/50 | tr_loss=0.6601 tr_acc=76.19% | te_loss=0.8711 te_acc=70.62%
+Ep 036/50 | tr_loss=0.6503 tr_acc=76.59% | te_loss=0.8601 te_acc=70.98%
+Ep 037/50 | tr_loss=0.6365 tr_acc=77.07% | te_loss=0.8609 te_acc=71.33%
+Ep 038/50 | tr_loss=0.6347 tr_acc=77.27% | te_loss=0.8699 te_acc=70.79%
+Ep 039/50 | tr_loss=0.6260 tr_acc=77.36% | te_loss=0.8605 te_acc=71.31%
+Ep 040/50 | tr_loss=0.6220 tr_acc=77.62% | te_loss=0.8714 te_acc=71.13%
+Ep 041/50 | tr_loss=0.6158 tr_acc=77.71% | te_loss=0.8683 te_acc=71.00%
+Ep 042/50 | tr_loss=0.6106 tr_acc=78.05% | te_loss=0.8667 te_acc=71.32%
+Ep 043/50 | tr_loss=0.6099 tr_acc=78.03% | te_loss=0.8569 te_acc=71.29%
+Ep 044/50 | tr_loss=0.6049 tr_acc=78.03% | te_loss=0.8652 te_acc=71.19%
+Ep 045/50 | tr_loss=0.6003 tr_acc=78.39% | te_loss=0.8649 te_acc=71.60%
+Ep 046/50 | tr_loss=0.5938 tr_acc=78.52% | te_loss=0.8645 te_acc=71.53%
+Ep 047/50 | tr_loss=0.5942 tr_acc=78.47% | te_loss=0.8661 te_acc=71.41%
+Ep 048/50 | tr_loss=0.5956 tr_acc=78.51% | te_loss=0.8645 te_acc=71.59%
+Ep 049/50 | tr_loss=0.5947 tr_acc=78.68% | te_loss=0.8647 te_acc=71.38%
+Ep 050/50 | tr_loss=0.5904 tr_acc=78.58% | te_loss=0.8648 te_acc=71.41%
+Best test acc: 71.60%
