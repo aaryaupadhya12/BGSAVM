@@ -15,3 +15,12 @@ torch-geometric==2.5.3
 
 # KaggleHub
 kagglehub==0.2.7
+
+seaborn
+scipy
+tqdm
+
+torch_scatter-2.1.2pt29cpu-cp312-cp312-linux_x86_64.whl
+torch_sparse-0.6.18pt29cpu-cp312-cp312-linux_x86_64.whl
+torch_cluster-1.6.3pt29cpu-cp312-cp312-linux_x86_64.whl
+torch_spline_conv-1.2.2pt29cpu-cp312-cp312-linux_x86_64.whl
