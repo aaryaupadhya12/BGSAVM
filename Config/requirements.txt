@@ -1,0 +1,17 @@
+# Use PyTorch CUDA 11.8 wheels  using KAGGLE P100 TESLA GPU's
+--extra-index-url https://download.pytorch.org/whl/cu118
+
+# Core
+numpy==1.26.4
+matplotlib==3.8.4
+
+# PyTorch (CUDA 11.8)
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
+
+# Torch Geometric
+torch-geometric==2.5.3
+
+# KaggleHub
+kagglehub==0.2.7
