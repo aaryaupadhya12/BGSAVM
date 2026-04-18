@@ -91,7 +91,9 @@ class LearnableSpreadingActivation(nn.Module):
         self._seed_bias_logit   = _p(init_seed_bias)
 
     @property
-    def decay(self) -> Tensor:       return torch.sigmoid(self._decay_logit)
+    def decay(self) -> Tensor:
+        # Cap below 1 so the diffusion recurrence can't compound into NaN.
+        return 0.99 * torch.sigmoid(self._decay_logit)
     @property
     def retention(self) -> Tensor:   return torch.sigmoid(self._retention_logit)
     @property

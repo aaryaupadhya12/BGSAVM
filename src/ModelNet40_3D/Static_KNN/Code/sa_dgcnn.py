@@ -137,35 +137,38 @@ class SA_DGCNN(nn.Module):
         motif = _motif_prior(data, num_nodes=pos.size(0), device=pos.device)
 
         # --- Block 1 (positional k-NN) ---
-        ei = knn_graph(pos, k=self.k, batch=batch, loop=False)
+        # knn_graph is a C++ op with float32/float64 dispatch — force fp32 even under AMP.
+        ei = knn_graph(pos.float(), k=self.k, batch=batch, loop=False)
         x1 = self.conv1(x, ei)
 
         # --- Block 2 (feature-space k-NN) ---
-        ei = knn_graph(x1, k=self.k, batch=batch, loop=False)
+        ei = knn_graph(x1.float(), k=self.k, batch=batch, loop=False)
         x2 = self.conv2(x1, ei)
 
         # --- SA pruning point ---
         if self.prune_ratio < 1.0:
-            learned = torch.sigmoid(self.seed_head(x2)).squeeze(-1)
-            mix = self.seed_mix
-            seed = mix * motif + (1.0 - mix) * learned
-            out = self.sa(
-                pos=pos, edge_index=ei, batch=batch, seed=seed,
-                prune_ratio=self.prune_ratio, min_nodes=self.prune_min_nodes,
-            )
+            # Run SA in fp32 — softmax/scatter/min-max normalize are unstable in fp16.
+            with torch.amp.autocast("cuda", enabled=False):
+                learned = torch.sigmoid(self.seed_head(x2.float())).squeeze(-1)
+                mix = self.seed_mix
+                seed = mix * motif.float() + (1.0 - mix) * learned
+                out = self.sa(
+                    pos=pos.float(), edge_index=ei, batch=batch, seed=seed,
+                    prune_ratio=self.prune_ratio, min_nodes=self.prune_min_nodes,
+                )
             keep = out.keep_mask
-            kept_score = out.energy[keep]
+            kept_score = out.energy[keep].to(x2.dtype)
             x1, x2 = x1[keep], x2[keep]
             pos, batch = pos[keep], batch[keep]
             # soft saliency reweighting so gradients flow through the score
             x2 = x2 * (1.0 + self.saliency_scale * kept_score.unsqueeze(-1))
 
         # --- Block 3 ---
-        ei = knn_graph(x2, k=self.k, batch=batch, loop=False)
+        ei = knn_graph(x2.float(), k=self.k, batch=batch, loop=False)
         x3 = self.conv3(x2, ei)
 
         # --- Block 4 ---
-        ei = knn_graph(x3, k=self.k, batch=batch, loop=False)
+        ei = knn_graph(x3.float(), k=self.k, batch=batch, loop=False)
         x4 = self.conv4(x3, ei)
 
         feats = torch.cat([x1, x2, x3, x4], dim=1)
