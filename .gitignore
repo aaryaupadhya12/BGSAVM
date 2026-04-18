@@ -421,3 +421,19 @@ FodyWeavers.xsd
 *.msp
 
 /data/
+
+# ── Project-specific ───────────────────────────────────────────
+# Training artefacts and notebook checkpoints
+runs/
+.ipynb_checkpoints/
+
+# Accidental Windows shell artefacts (bash redirect of `> NUL`, botched paths)
+nul
+_temp_cell*.txt
+C:UsersadvaymainDocumentsdevBGSAVM_*
+
+# Python envs / caches
+.venv/
+venv/
+env/
+*.egg-info/
