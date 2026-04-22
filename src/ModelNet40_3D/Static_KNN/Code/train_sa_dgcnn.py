@@ -78,14 +78,32 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--embed-dims", type=int, default=1024)
     p.add_argument("--small", action="store_true")
     # spreading activation
-    p.add_argument("--prune-ratio", type=float, default=0.7)
-    p.add_argument("--prune-min-nodes", type=int, default=64)
+    p.add_argument("--gate-mode", choices=("soft", "hard", "off"), default="soft",
+                   help="soft=multiplicative gate (preserves multiscale concat); "
+                        "hard=legacy top-k prune; off=baseline DGCNN (no SA).")
+    p.add_argument("--gate-floor", type=float, default=0.1,
+                   help="Minimum gate value in soft mode — low-salience nodes "
+                        "are attenuated but not dropped.")
+    p.add_argument("--gate-points", type=str, default="2",
+                   help="Comma-separated conv indices after which to gate. "
+                        "'2' = gate after conv2 (default); '2,3' = pyramidal. "
+                        "Only soft mode supports pyramidal.")
+    p.add_argument("--prune-ratio", type=float, default=0.7,
+                   help="Only used when --gate-mode=hard.")
+    p.add_argument("--prune-min-nodes", type=int, default=307,
+                   help="Minimum surviving nodes per graph in hard-prune mode. "
+                        "Default ~0.3 * 1024 — raise the floor so BN stats stay stable.")
     p.add_argument("--sa-steps", type=int, default=2)
     p.add_argument("--sa-learnable", action="store_true", default=True)
     p.add_argument("--no-sa-learnable", dest="sa_learnable", action="store_false")
     p.add_argument("--sa-reweight-each-step", action="store_true")
-    p.add_argument("--saliency-scale", type=float, default=0.25)
+    p.add_argument("--saliency-scale", type=float, default=0.25,
+                   help="Only used when --gate-mode=hard.")
     p.add_argument("--seed-mix-init", type=float, default=0.5)
+    # test-time augmentation
+    p.add_argument("--tta-rotations", type=int, default=1,
+                   help="Number of evenly-spaced Y-axis rotations to average "
+                        "at test time. 1 = no TTA; 12 is the classic setting.")
     return p.parse_args()
 
 
@@ -248,6 +266,65 @@ def evaluate(model, loader, device, use_amp: bool) -> dict[str, float]:
     }
 
 
+def _rotate_batch_y(batch: Any, theta: float) -> Any:
+    """Apply a fixed Y-axis rotation (theta radians) to a PyG batch in-place.
+
+    Unlike ``augment_batch``, this is deterministic and rotation-only — no
+    scale or jitter — so it's safe for test-time ensemble averaging.
+    """
+    cos_t = math.cos(theta)
+    sin_t = math.sin(theta)
+    R = torch.tensor(
+        [[cos_t, 0.0, sin_t], [0.0, 1.0, 0.0], [-sin_t, 0.0, cos_t]],
+        device=batch.pos.device, dtype=batch.pos.dtype,
+    )
+    batch.pos = batch.pos @ R.T
+    if batch.x.size(1) >= 6:
+        batch.x[:, :3] = batch.pos
+        batch.x[:, 3:6] = batch.x[:, 3:6] @ R.T
+    return batch
+
+
+@torch.no_grad()
+def evaluate_tta(
+    model, loader, device, use_amp: bool, n_rotations: int
+) -> dict[str, float]:
+    """Test-time augmentation via Y-axis rotation averaging.
+
+    Runs ``n_rotations`` forward passes with evenly-spaced Y rotations, averages
+    softmax probabilities, and returns the metrics.  ``n_rotations=1`` is
+    equivalent to ``evaluate`` and is a no-op.
+    """
+    if n_rotations <= 1:
+        return evaluate(model, loader, device, use_amp=use_amp)
+    model.eval()
+    preds, labels = [], []
+    angles = [2 * math.pi * i / n_rotations for i in range(n_rotations)]
+    for batch in tqdm(loader, desc=f"  eval x{n_rotations}", leave=False):
+        batch = batch.to(device, non_blocking=True)
+        labels.append(batch.y.view(-1).cpu())
+        # Snapshot original pos/x so each rotation starts from the same input.
+        pos0 = batch.pos.clone()
+        x0 = batch.x.clone()
+        prob_sum = None
+        for theta in angles:
+            batch.pos = pos0.clone()
+            batch.x = x0.clone()
+            batch = _rotate_batch_y(batch, theta)
+            with torch.amp.autocast("cuda", enabled=use_amp):
+                logits = model(batch)
+            probs = F.softmax(logits.float(), dim=1)
+            prob_sum = probs if prob_sum is None else prob_sum + probs
+        preds.append((prob_sum / n_rotations).argmax(1).cpu())
+    p = torch.cat(preds).numpy()
+    y = torch.cat(labels).numpy()
+    return {
+        "oa":       accuracy_score(y, p) * 100.0,
+        "macc":     balanced_accuracy_score(y, p) * 100.0,
+        "macro_f1": f1_score(y, p, average="macro", zero_division=0) * 100.0,
+    }
+
+
 # ───────────────────────────────────────────────────── efficiency ──
 @torch.no_grad()
 def measure_efficiency(model, sample: Data, device: torch.device) -> dict[str, Any]:
@@ -317,10 +394,20 @@ def main() -> None:
     args = parse_args()
     set_seed(args.seed)
 
-    run_name = args.run_name or (
-        f"sa_dgcnn_k{args.k_neighbors}_prune{args.prune_ratio}"
-        f"_steps{args.sa_steps}_{'learn' if args.sa_learnable else 'fixed'}"
-    )
+    if args.run_name:
+        run_name = args.run_name
+    elif args.gate_mode == "soft":
+        run_name = (
+            f"sa_dgcnn_k{args.k_neighbors}_softgate{args.gate_floor}"
+            f"_steps{args.sa_steps}_{'learn' if args.sa_learnable else 'fixed'}"
+        )
+    elif args.gate_mode == "hard":
+        run_name = (
+            f"sa_dgcnn_k{args.k_neighbors}_hardprune{args.prune_ratio}"
+            f"_steps{args.sa_steps}_{'learn' if args.sa_learnable else 'fixed'}"
+        )
+    else:  # off
+        run_name = f"sa_dgcnn_k{args.k_neighbors}_baseline"
     out_dir = args.output_dir / run_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -347,12 +434,16 @@ def main() -> None:
     val_loader   = _loader(val_list,   False)
     test_loader  = _loader(test_list,  False)
 
+    gate_points = tuple(int(p.strip()) for p in args.gate_points.split(",") if p.strip())
     model = SA_DGCNN(
         in_channels=args.in_channels,
         num_classes=len(classes),
         k=args.k_neighbors,
         dropout=args.dropout,
         embed_dims=args.embed_dims,
+        gate_mode=args.gate_mode,
+        gate_floor=args.gate_floor,
+        gate_points=gate_points,
         prune_ratio=args.prune_ratio,
         prune_min_nodes=args.prune_min_nodes,
         sa_steps=args.sa_steps,
@@ -423,6 +514,18 @@ def main() -> None:
     print(f"\nBest val epoch: {best_epoch}  | val OA {best_val_oa:.2f}%")
     print(f"Test  OA  {test['oa']:.2f}%  mAcc {test['macc']:.2f}%  macro_f1 {test['macro_f1']:.2f}%")
 
+    test_tta: dict[str, float] | None = None
+    if args.tta_rotations > 1:
+        test_tta = evaluate_tta(
+            model, test_loader, DEVICE,
+            use_amp=use_amp, n_rotations=args.tta_rotations,
+        )
+        print(
+            f"Test-TTA x{args.tta_rotations}: "
+            f"OA  {test_tta['oa']:.2f}%  mAcc {test_tta['macc']:.2f}%  "
+            f"macro_f1 {test_tta['macro_f1']:.2f}%"
+        )
+
     efficiency = measure_efficiency(model, test_list[0], DEVICE)
     print("Efficiency:", {k: (f"{v:.3f}" if isinstance(v, float) else v) for k, v in efficiency.items()})
 
@@ -436,6 +539,7 @@ def main() -> None:
             "best_val":       ckpt["val"],
             "best_epoch":     best_epoch,
             "test":           test,
+            "test_tta":       test_tta,
             "efficiency":     efficiency,
             "final_hparams":  model.current_hparams(),
             "n_params":       n_params,
