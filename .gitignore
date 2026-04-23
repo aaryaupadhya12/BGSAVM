@@ -437,3 +437,5 @@ C:UsersadvaymainDocumentsdevBGSAVM_*
 venv/
 env/
 *.egg-info/
+modelnet40_final.pt
+modelnet40_final_v2.pt

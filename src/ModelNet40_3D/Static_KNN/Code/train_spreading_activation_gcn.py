@@ -20,6 +20,7 @@ from torch_geometric.utils import subgraph
 from tqdm.auto import tqdm
 
 from spreading_activation import EnergySpreadingActivation
+from sa_core import per_graph_topk
 
 
 ROOT = Path(__file__).resolve().parent
@@ -212,17 +213,8 @@ def ensure_motif_feature(data_list: list[Data], k_neighbors: int) -> list[Data]:
 
 
 def topk_mask_per_graph(scores: torch.Tensor, batch: torch.Tensor, keep_ratio: float, min_nodes: int) -> torch.Tensor:
-    keep_ratio = float(max(0.0, min(1.0, keep_ratio)))
-    mask = torch.zeros_like(scores, dtype=torch.bool)
-    for graph_id in batch.unique(sorted=True):
-        node_idx = torch.nonzero(batch == graph_id, as_tuple=False).view(-1)
-        if node_idx.numel() == 0:
-            continue
-        k = max(min_nodes, int(round(node_idx.numel() * keep_ratio)))
-        k = min(k, node_idx.numel())
-        topk_local = torch.topk(scores[node_idx], k=k, largest=True).indices
-        mask[node_idx[topk_local]] = True
-    return mask
+    # Vectorised + deterministic-under-ties.  Single source of truth in sa_core.
+    return per_graph_topk(scores, batch, keep_ratio, min_nodes=min_nodes)
 
 
 def rebuild_knn_edge_index(pos: torch.Tensor, k_neighbors: int) -> torch.Tensor:
@@ -299,37 +291,37 @@ def apply_variant(
 
     transformed = []
     for data in tqdm(prepared, desc="Applying spreading activation", leave=False):
-        output = spreader(data, prune_ratio=prune_ratio)
-        energy_column = output.energy.unsqueeze(1)
+        # Never let the spreader apply the kept-side pruning for the `sa` variant;
+        # we only need the energy scores in that case and handle feature scaling below.
+        # For `sa_prune`, we also derive the mask from the raw energy so downstream
+        # features aren't silently multiplied twice (the module used to write
+        # `weighted_x` into `pruned_data.x`, which, combined with the re-scaling
+        # below, double-applied the energy signal).
+        output = spreader(data, prune_ratio=None)
+        energy = output.energy
+        energy_column = energy.unsqueeze(1).float()
+
         if variant == "sa_prune":
             if prune_ratio is None:
                 raise ValueError("sa_prune requires --prune-ratio.")
-            if output.keep_mask is None:
-                raise ValueError("Spreading activation pruning did not return a keep mask.")
+            batch_idx = torch.zeros(data.num_nodes, dtype=torch.long, device=energy.device)
+            keep_mask = topk_mask_per_graph(energy, batch_idx, prune_ratio, min_nodes=128)
             base_data = data.clone()
             base_data.x = data.x[:, :6].float()
-            pruned = prune_single_graph(base_data, output.keep_mask, k_neighbors=k_neighbors)
-            pruned.energy = output.energy[output.keep_mask]
+            pruned = prune_single_graph(base_data, keep_mask, k_neighbors=k_neighbors)
+            pruned.energy = energy[keep_mask]
             transformed.append(pruned)
             continue
-        if output.pruned_data is not None:
-            new_data = output.pruned_data
-            base_x = new_data.x[:, :6].float()
-            kept_energy = new_data.energy.unsqueeze(1).float()
-            if sa_feature_mode == "multiply":
-                new_data.x = base_x * kept_energy
-            else:
-                new_data.x = base_x * (1.0 + sa_scale * kept_energy)
-            transformed.append(new_data)
+
+        # Pure `sa` variant: energy-weight the raw 6-channel input, no pruning.
+        new_data = data.clone()
+        base_x = data.x[:, :6].float()
+        if sa_feature_mode == "multiply":
+            new_data.x = base_x * energy_column
         else:
-            new_data = data.clone()
-            base_x = data.x[:, :6].float()
-            if sa_feature_mode == "multiply":
-                new_data.x = base_x * energy_column
-            else:
-                new_data.x = base_x * (1.0 + sa_scale * energy_column)
-            new_data.energy = output.energy
-            transformed.append(new_data)
+            new_data.x = base_x * (1.0 + sa_scale * energy_column)
+        new_data.energy = energy
+        transformed.append(new_data)
     return transformed
 
 
